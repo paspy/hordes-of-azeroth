@@ -166,7 +166,7 @@ namespace HordesOfAzeroth.Launcher
                 catch (InvalidOperationException)
                 {
                 }
-                if (path != null && path.StartsWith(root, Platform.IsWindows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                if (path != null && path.StartsWith(root, Platform.PathComparison))
                     yield return process;
             }
         }
@@ -193,7 +193,7 @@ namespace HordesOfAzeroth.Launcher
                         $"\"--datadir={m_folder.MariaDbData}\"", "--password=root",
                         $"\"--config={Path.Combine(m_folder.Config, "mariadb.ini")}\"", "--verbose-bootstrap");
                 else
-                    await CreateLinuxDatabaseFilesAsync();
+                    await CreateUnixDatabaseFilesAsync();
             }
             catch (InvalidOperationException failure)
             {
@@ -212,7 +212,7 @@ namespace HordesOfAzeroth.Launcher
             }
         }
 
-        async Task CreateLinuxDatabaseFilesAsync()
+        async Task CreateUnixDatabaseFilesAsync()
         {
             string rootPassword = Path.Combine(m_folder.LauncherData, "root-password.sql");
             Directory.CreateDirectory(m_folder.LauncherData);
@@ -220,7 +220,7 @@ namespace HordesOfAzeroth.Launcher
             try
             {
                 string FromMariaDb(string path) => Path.GetRelativePath(m_folder.MariaDb, path);
-                await RunToEndAsync(Path.Combine(m_folder.MariaDb, "scripts", "mariadb-install-db"), m_folder.MariaDb, DatabaseCreationLimit,
+                await RunToEndAsync(UnixInstallDbProgram(), m_folder.MariaDb, DatabaseCreationLimit,
                     $"\"--defaults-file={FromMariaDb(Path.Combine(m_folder.Config, "mariadb.ini"))}\"",
                     "--basedir=.", $"\"--datadir={FromMariaDb(m_folder.MariaDbData)}\"",
                     "--auth-root-authentication-method=normal", $"\"--extra-file={FromMariaDb(rootPassword)}\"");
@@ -229,6 +229,12 @@ namespace HordesOfAzeroth.Launcher
             {
                 File.Delete(rootPassword);
             }
+        }
+
+        string UnixInstallDbProgram()
+        {
+            string scripts = Path.Combine(m_folder.MariaDb, "scripts", "mariadb-install-db");
+            return File.Exists(scripts) ? scripts : MariaDbProgram("mariadb-install-db");
         }
 
         string DatabaseErrorLogLine()

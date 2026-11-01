@@ -35,6 +35,11 @@ namespace HordesOfAzeroth.Launcher
         [DllImport("kernel32.dll")]
         static extern bool CloseHandle(IntPtr handle);
 
+        const int MacPathLimit = 4096;
+
+        [DllImport("libproc", SetLastError = true)]
+        static extern int proc_pidpath(int processId, byte[] buffer, uint size);
+
         public sealed class Owner
         {
             public int ProcessId { get; set; }
@@ -58,6 +63,10 @@ namespace HordesOfAzeroth.Launcher
             {
                 ids.UnionWith(ListenerIds(IPv4, IPv4RowSize, IPv4PortOffset, IPv4PidOffset, port));
                 ids.UnionWith(ListenerIds(IPv6, IPv6RowSize, IPv6PortOffset, IPv6PidOffset, port));
+            }
+            else if (Platform.IsMacOS)
+            {
+                ids.UnionWith(MacListenerIds(port));
             }
             else
             {
@@ -144,6 +153,33 @@ namespace HordesOfAzeroth.Launcher
             return ids;
         }
 
+        static IEnumerable<int> MacListenerIds(int port)
+        {
+            List<int> ids = new List<int>();
+            ProcessStartInfo info = new ProcessStartInfo("/usr/sbin/lsof")
+            {
+                ArgumentList = { "-nP", "-iTCP:" + port.ToString(CultureInfo.InvariantCulture), "-sTCP:LISTEN", "-Fp" },
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true,
+            };
+            try
+            {
+                using (Process lsof = Process.Start(info))
+                {
+                    string output = lsof.StandardOutput.ReadToEnd();
+                    lsof.WaitForExit(5000);
+                    foreach (string line in output.Split('\n'))
+                        if (line.StartsWith("p", StringComparison.Ordinal) && int.TryParse(line.Substring(1), NumberStyles.None, CultureInfo.InvariantCulture, out int id))
+                            ids.Add(id);
+                }
+            }
+            catch (Exception e) when (e is System.ComponentModel.Win32Exception || e is InvalidOperationException || e is IOException)
+            {
+            }
+            return ids;
+        }
+
         static int HostOrderPort(int networkOrder) => ((networkOrder & 0xFF) << 8) | ((networkOrder >> 8) & 0xFF);
 
         static Owner Describe(int processId)
@@ -165,6 +201,12 @@ namespace HordesOfAzeroth.Launcher
 
         static string ImagePath(int processId)
         {
+            if (Platform.IsMacOS)
+            {
+                byte[] buffer = new byte[MacPathLimit];
+                int length = proc_pidpath(processId, buffer, (uint)buffer.Length);
+                return length > 0 ? Encoding.UTF8.GetString(buffer, 0, length) : null;
+            }
             if (!Platform.IsWindows)
             {
                 try
@@ -196,7 +238,7 @@ namespace HordesOfAzeroth.Launcher
             if (owner.Path == null)
                 return false;
             string root = System.IO.Path.GetFullPath(folder).TrimEnd(System.IO.Path.DirectorySeparatorChar) + System.IO.Path.DirectorySeparatorChar;
-            return owner.Path.StartsWith(root, Platform.IsWindows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+            return owner.Path.StartsWith(root, Platform.PathComparison);
         }
     }
 }
