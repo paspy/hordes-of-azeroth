@@ -7,7 +7,8 @@ param(
     [string]$NotesFile,
     [switch]$OwnNotesOnly,
     [switch]$RepostDiscord,
-    [int]$Hotfix = 0
+    [int]$Hotfix = 0,
+    [ValidateSet('windows', 'linux', 'macos')][string[]]$Systems = @('windows', 'linux')
 )
 . "$PSScriptRoot\common.ps1"
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
@@ -34,6 +35,8 @@ $clientSource = Join-Path $releaseRoot 'src\client'
 $clientTarget = Join-Path $buildDir 'client-target'
 $clientOut = Join-Path $buildDir 'client'
 $linuxOut = Join-Path $buildDir 'linux'
+$macosOut = Join-Path $buildDir 'macos'
+$userDataDir = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'HordesOfAzeroth'
 $runtimeDlls = @('msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll')
 $fixedZipTime = [DateTimeOffset]::new(2000, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
 
@@ -87,14 +90,14 @@ function Add-EarlierTestNotes($Notes, $Previous) {
 
 function Get-DiscordWebhook {
     if ($env:HOA_DISCORD_WEBHOOK) { return $env:HOA_DISCORD_WEBHOOK.Trim() }
-    $file = Join-Path $env:LOCALAPPDATA 'HordesOfAzeroth\discord-webhook.txt'
+    $file = Join-Path $userDataDir 'discord-webhook.txt'
     if (Test-Path $file) { return (Get-Content $file -Raw).Trim() }
     return $null
 }
 
 $discordDescriptionLimit = 4096
 $discordPartHeaderRoom = 24
-$discordPostsFile = Join-Path $env:LOCALAPPDATA 'HordesOfAzeroth\discord-posts.txt'
+$discordPostsFile = Join-Path $userDataDir 'discord-posts.txt'
 
 function ConvertTo-DiscordChunks([string]$Notes, [string]$ReleaseUrl) {
     $lines = $Notes -split "`r?`n" | ForEach-Object { if ($_ -match '^####\s+(.+)$') { "**$($Matches[1].Trim())**" } else { $_ } }
@@ -304,6 +307,23 @@ function Invoke-LinuxBuild([string]$Part) {
     [System.IO.File]::WriteAllText($stamp, $commit)
 }
 
+function Invoke-MacBuild([string]$Part) {
+    if ($OnWindows) { throw 'The macOS packages build on a Mac: run release.ps1 -Systems macos there.' }
+    $submodule = if ($Part -eq 'server') { 'server/core' } else { 'client' }
+    $source = if ($Part -eq 'server') { $serverSource } else { $clientSource }
+    $commit = (git -C $RepoRoot rev-parse "HEAD:$submodule").Trim()
+    $stamp = Join-Path $macosOut "$Part-commit.txt"
+    if ((Test-Path $stamp) -and (Get-Content $stamp -Raw).Trim() -eq $commit) { return }
+    Sync-ReleaseSource (Join-Path $RepoRoot $submodule) $source $commit
+    Write-Host "Building the macOS $Part from fork commit $($commit.Substring(0, 9))..."
+    Invoke-Native "macOS $Part build" 'bash' @((Join-Path $PSScriptRoot 'macos/build-release.sh'), $Part, $source, $macosOut)
+    if ($Part -eq 'client') {
+        New-Item -ItemType Directory -Force $clientOut | Out-Null
+        Write-ClientLicenses
+    }
+    [System.IO.File]::WriteAllText($stamp, $commit)
+}
+
 function Invoke-PackageBuild([string]$Name) {
     New-Item -ItemType Directory -Force $buildDir | Out-Null
     switch ($Name) {
@@ -326,11 +346,17 @@ function Invoke-PackageBuild([string]$Name) {
         }
         'linux-server' { Invoke-LinuxBuild 'server' }
         'linux-client' { Invoke-LinuxBuild 'client' }
+        'macos-launcher' {
+            $project = Join-Path (Get-CommittedTree) 'tools/launcher/HordesOfAzerothLauncher.csproj'
+            Invoke-Native 'macOS launcher build' 'dotnet' @('publish', $project, '-c', 'Release', '-r', 'osx-arm64', '-nologo', "-p:Repository=$repository", "-p:StatsUrl=$statsUrl", '-o', (Join-Path $macosOut 'launcher'))
+        }
+        'macos-server' { Invoke-MacBuild 'server' }
+        'macos-client' { Invoke-MacBuild 'client' }
         'world-dump' {
             $dump = Join-Path $buildDir 'world.sql'
             if ($ReuseWorldDump -and (Test-Path $dump)) { return }
             if (-not (Test-DbUp)) { throw 'MariaDB is not running. Start it with tools\start-server.ps1 -DatabaseOnly.' }
-            & (Join-Path $MariaDir 'bin\mariadb-dump.exe') @DbRootArgs --skip-dump-date --order-by-primary --single-transaction --ignore-table-data=mangos.variables "--result-file=$dump" mangos
+            & (Get-MariaProgram 'mariadb-dump') @DbRootArgs --skip-dump-date --order-by-primary --single-transaction --ignore-table-data=mangos.variables "--result-file=$dump" mangos
             if ($LASTEXITCODE -ne 0) { throw 'mariadb-dump of the world database failed.' }
         }
         default { throw "Unknown build step $Name." }
@@ -477,6 +503,24 @@ function Get-ThirdPartyEntry($Item) {
     }
 }
 
+function Get-HostedThirdPartyEntry($Item) {
+    $local = Join-Path $RepoRoot $Item.localCopy
+    if (-not (Test-Path $local)) { throw "$($Item.name) for $($Item.os) is not built: $local is missing." }
+    $name = [System.IO.Path]::GetFileName($local)
+    $hosted = Join-Path $assetsDir $name
+    Copy-Item $local $hosted -Force
+    $uploads.Add($hosted)
+    [ordered]@{
+        name = $Item.name
+        version = $Item.version
+        licence = $Item.licence
+        url = "$baseUrl/$name"
+        size = (Get-Item $hosted).Length
+        sha256 = Get-Sha256 $hosted
+        install = $Item.install
+    }
+}
+
 function Get-NavGroupFiles($Group) {
     $mmaps = Join-Path $DataDir 'mmaps'
     foreach ($map in $Group.maps.PSObject.Properties) {
@@ -544,8 +588,9 @@ New-Item -ItemType Directory -Force $assetsDir | Out-Null
 
 $operatingSystems = @(
     [pscustomobject]@{ Name = 'windows'; Manifest = 'manifest.json'; ZipSuffix = ''; Launcher = 'HoALauncher.exe'; Download = 'HoALauncher.exe' },
-    [pscustomobject]@{ Name = 'linux'; Manifest = 'manifest-linux.json'; ZipSuffix = '-linux'; Launcher = 'HoALauncher'; Download = 'HoALauncher-linux.tar.gz' }
-)
+    [pscustomobject]@{ Name = 'linux'; Manifest = 'manifest-linux.json'; ZipSuffix = '-linux'; Launcher = 'HoALauncher'; Download = 'HoALauncher-linux.tar.gz' },
+    [pscustomobject]@{ Name = 'macos'; Manifest = 'manifest-macos.json'; ZipSuffix = '-macos'; Launcher = 'HoALauncher'; Download = 'HoALauncher-macos.tar.gz' }
+) | Where-Object { $Systems -contains $_.Name }
 $previousByOs = @{}
 foreach ($os in $operatingSystems) {
     $previousByOs[$os.Name] = @{}
@@ -643,20 +688,24 @@ foreach ($os in $operatingSystems) {
         clientDlls = $releaseConfig.clientDlls
         releaseNotes = $notes
         navTiles = $navGroups
-        thirdParty = @($releaseConfig.thirdParty | Where-Object { -not $_.os -or $_.os -eq $os.Name } | ForEach-Object { Get-ThirdPartyEntry $_ })
+        thirdParty = @($releaseConfig.thirdParty | Where-Object { -not $_.os -or $_.os -eq $os.Name } | ForEach-Object { if ($_.hosted) { Get-HostedThirdPartyEntry $_ } else { Get-ThirdPartyEntry $_ } })
         packages = $packagesByOs[$os.Name]
     }
     $manifestPath = Join-Path $assetsDir $os.Manifest
     [System.IO.File]::WriteAllText($manifestPath, ($manifest | ConvertTo-Json -Depth 8) + "`n")
     $releaseUploads.Add($manifestPath)
 
-    $launcherBuild = if ($os.Name -eq 'windows') { Join-Path $buildDir "launcher\$($os.Launcher)" } else { Join-Path $linuxOut "launcher\$($os.Launcher)" }
+    $launcherBuild = switch ($os.Name) {
+        'windows' { Join-Path $buildDir "launcher\$($os.Launcher)" }
+        'linux' { Join-Path $linuxOut "launcher\$($os.Launcher)" }
+        'macos' { Join-Path $macosOut "launcher/$($os.Launcher)" }
+    }
     if (-not (Test-Path $launcherBuild)) { continue }
     $download = Join-Path $assetsDir $os.Download
     if ($os.Name -eq 'windows') {
         Copy-Item $launcherBuild $download -Force
     } else {
-        Invoke-Native 'Linux launcher archive' 'python' @((Join-Path $PSScriptRoot 'linux\pack-launcher.py'), $launcherBuild, $download)
+        Invoke-Native 'Launcher archive' (Get-Python) @((Join-Path $PSScriptRoot 'linux\pack-launcher.py'), $launcherBuild, $download)
     }
     $releaseUploads.Add($download)
     $launcherHashes.Add("``$($os.Download)`` SHA-256: ``$(Get-Sha256 $download)``")
@@ -664,7 +713,7 @@ foreach ($os in $operatingSystems) {
 $notesPath = Join-Path $outDir 'notes.md'
 $releaseBody = $currentNotes.notes
 if ($launcherHashes.Count) {
-    $releaseBody += "`n`n---`n`nNew here? On Windows, download ``HoALauncher.exe`` below and put it in your World of Warcraft 1.12.1 folder. On Linux and Steam Deck, unpack ``HoALauncher-linux.tar.gz`` into that folder and run ``HoALauncher``. Already playing? The launcher updates itself.`n`n" + ($launcherHashes -join "`n`n")
+    $releaseBody += "`n`n---`n`nNew here? On Windows, download ``HoALauncher.exe`` below and put it in your World of Warcraft 1.12.1 folder. On Linux and Steam Deck, unpack ``HoALauncher-linux.tar.gz`` into that folder and run ``HoALauncher``. On a Mac with Apple silicon and macOS 26 or later, unpack ``HoALauncher-macos.tar.gz`` into that folder, run ``xattr -dr com.apple.quarantine HoALauncher`` once, then run ``HoALauncher``. Already playing? The launcher updates itself.`n`n" + ($launcherHashes -join "`n`n")
 }
 [System.IO.File]::WriteAllText($notesPath, $releaseBody + "`n")
 

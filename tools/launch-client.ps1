@@ -14,5 +14,16 @@ Get-ChildItem (Join-Path $env:BENILLA_HOME 'cache') -Filter *.bin -Recurse -Erro
 if (-not (Test-Path (Join-Path $client 'WoW'))) { $env:WOW_DATA = Join-Path $RepoRoot 'Data' }
 $env:WOW_USER = $Account
 $env:WOW_PASS = $Password
-Start-Quoted $exe $ClientArgs $client | Out-Null
+if ($OnWindows) {
+    Start-Quoted $exe $ClientArgs $client | Out-Null
+} else {
+    New-Item -ItemType Directory -Force $LogDir | Out-Null
+    $params = @{
+        FilePath = $exe; WorkingDirectory = $client
+        RedirectStandardOutput = (Join-Path $LogDir 'Client.log'); RedirectStandardError = (Join-Path $LogDir 'ClientErrors.log')
+    }
+    if ($ClientArgs) { $params.ArgumentList = $ClientArgs }
+    Start-Process @params | Out-Null
+    Write-Host "Client output goes to $(Join-Path $LogDir 'Client.log')"
+}
 Write-Host "Started HordesOfAzeroth; it logs in as $Account"

@@ -21,6 +21,15 @@
       "licence": "GPL-2.0",
       "url": "https://archive.mariadb.org/mariadb-11.4.13/bintar-linux-systemd-x86_64/mariadb-11.4.13-linux-systemd-x86_64.tar.gz",
       "install": { "unzipTo": "server/mariadb", "stripTopFolder": true }
+    },
+    {
+      "name": "MariaDB",
+      "os": "macos",
+      "version": "11.4.13",
+      "licence": "GPL-2.0",
+      "hosted": true,
+      "localCopy": "release/build/macos/mariadb-11.4.13-macos-arm64.tar.gz",
+      "install": { "unzipTo": "server/mariadb", "stripTopFolder": true }
     }
   ],
   "packages": [
@@ -29,6 +38,8 @@
     { "name": "glue", "git": ["Interface/GlueXML"] },
     { "name": "launcher", "os": "linux", "build": "linux-launcher", "changesWith": "tools/launcher/*.*", "files": [{ "from": "release/build/linux/launcher/HoALauncher", "to": "HoALauncher" }] },
     { "name": "client", "os": "windows", "build": "client", "files": [{ "from": "release/build/client/HordesOfAzeroth.exe", "to": "HordesOfAzeroth.exe" }, { "from": "release/build/client/CLIENT-LICENSES.md", "to": "CLIENT-LICENSES.md" }, { "from": "THIRD-PARTY-NOTICES.md" }] },
+    { "name": "launcher", "os": "macos", "build": "macos-launcher", "changesWith": "tools/launcher/*.*", "files": [{ "from": "release/build/macos/launcher/HoALauncher", "to": "HoALauncher" }] },
+    { "name": "client", "os": "macos", "build": "macos-client", "files": [{ "from": "release/build/macos/client/HordesOfAzeroth", "to": "HordesOfAzeroth.macos" }, { "from": "release/build/client/CLIENT-LICENSES.md", "to": "CLIENT-LICENSES.md" }, { "from": "THIRD-PARTY-NOTICES.md" }] },
     { "name": "client", "os": "linux", "build": "linux-client", "files": [{ "from": "release/build/linux/client/HordesOfAzeroth", "to": "HordesOfAzeroth.x86_64" }, { "from": "release/build/client/CLIENT-LICENSES.md", "to": "CLIENT-LICENSES.md" }, { "from": "THIRD-PARTY-NOTICES.md" }] },
     { "name": "telegraphkit", "os": "windows", "build": "telegraphkit", "changesWith": "tools/telegraphs/*.cs", "files": [{ "from": "release/build/TelegraphKit.exe", "to": "tools/TelegraphKit.exe" }] },
     {
@@ -81,6 +92,31 @@
         { "from": "release/build/linux/server/bin/Extractors/MoveMapGenerator", "to": "server/run/Extractors/MoveMapGenerator" },
         { "from": "release/build/linux/server/bin/Extractors/config.json", "to": "server/run/Extractors/config.json" },
         { "from": "release/build/linux/server/bin/Extractors/offmesh.txt", "to": "server/run/Extractors/offmesh.txt" }
+      ]
+    },
+    {
+      "name": "server",
+      "os": "macos",
+      "build": "macos-server",
+      "files": [
+        { "from": "release/build/macos/server/mangosd", "to": "server/run/mangosd" },
+        { "from": "release/build/macos/server/realmd", "to": "server/run/realmd" },
+        { "from": "release/build/macos/server/lib/*.dylib", "to": "server/run/lib" },
+        { "from": "release/build/macos/server/mangosd.conf.dist", "to": "server/run/mangosd.conf.dist" },
+        { "from": "release/build/macos/server/realmd.conf.dist", "to": "server/run/realmd.conf.dist" }
+      ]
+    },
+    {
+      "name": "extractors",
+      "os": "macos",
+      "build": "macos-server",
+      "files": [
+        { "from": "release/build/macos/server/Extractors/MapExtractor", "to": "server/run/Extractors/MapExtractor" },
+        { "from": "release/build/macos/server/Extractors/VMapExtractor", "to": "server/run/Extractors/VMapExtractor" },
+        { "from": "release/build/macos/server/Extractors/VMapAssembler", "to": "server/run/Extractors/VMapAssembler" },
+        { "from": "release/build/macos/server/Extractors/MoveMapGenerator", "to": "server/run/Extractors/MoveMapGenerator" },
+        { "from": "release/build/macos/server/Extractors/config.json", "to": "server/run/Extractors/config.json" },
+        { "from": "release/build/macos/server/Extractors/offmesh.txt", "to": "server/run/Extractors/offmesh.txt" }
       ]
     },
     {

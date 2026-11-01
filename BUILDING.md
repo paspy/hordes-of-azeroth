@@ -120,7 +120,7 @@ The launcher is an Avalonia app for .NET 10 in `tools/launcher`, built for Windo
 
 ## Building on macOS
 
-The development tree also builds and runs on macOS (Apple Silicon). Players still need Windows or Linux: the launcher and the releases have no macOS build yet. The steps follow [Building from scratch](#building-from-scratch), with these differences.
+The development tree also builds and runs on macOS (Apple Silicon). The steps follow [Building from scratch](#building-from-scratch), with these differences.
 
 You need the Xcode command line tools, [Rust](https://rustup.rs), the .NET 10 SDK and [Homebrew](https://brew.sh), and the 1.12.1 client in the repository root. Install the rest with Homebrew:
 
@@ -213,6 +213,8 @@ The monster paths ship the same way: each group in `config/navtiles.json` become
 1. Raise `VERSION`.
 2. Add a section for it at the top of `CHANGELOG.md`.
 3. Run `tools\release.ps1 -Publish`.
+
+The macOS packages (`manifest-macos.json`, `HoALauncher-macos.tar.gz`, `*-macos.zip`) are built on a Mac with Apple silicon: `pwsh tools/release.ps1 -Systems macos`. `-Systems` picks which of `windows`, `linux` and `macos` a run builds; the default is `windows` and `linux`. Before the first macOS release, build MariaDB once with `tools/macos/build-mariadb.sh`: MariaDB publishes no macOS binaries, so the release hosts its own `mariadb-<version>-macos-arm64.tar.gz` next to the packages. `tools/macos/build-release.sh` builds the server and client for the release. `tools/macos/bundle-dylibs.sh` copies the Homebrew libraries they link into a `lib` folder beside them, points them there with `@rpath`, and signs every binary ad hoc. Nothing is notarized, so players clear the quarantine flag once (`xattr -dr com.apple.quarantine HoALauncher`). The binaries need macOS 26 or later, the version Homebrew's libraries are built for. A macOS run stages its files in `release/<version>/assets`; publishing them into the same GitHub release as a Windows run is not automated yet.
 
 The newest changelog section becomes the GitHub release text, and the launcher shows every section as patch notes. In a section, `### Heading` lines become subheadings, lines starting with `- ` become bullets, and other lines are paragraphs:
 

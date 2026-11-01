@@ -127,7 +127,10 @@ foreach ($group in $groups) {
 }
 
 $json = [ordered]@{ groups = $output } | ConvertTo-Json -Depth 5
-[System.IO.File]::WriteAllText($OutFile, $json + "`n")
+$fresh = $json | ConvertFrom-Json | ConvertTo-Json -Depth 5 -Compress
+$existing = if (Test-Path $OutFile) { Get-Content $OutFile -Raw | ConvertFrom-Json | ConvertTo-Json -Depth 5 -Compress }
+$changed = $fresh -ne $existing
+if ($changed) { [System.IO.File]::WriteAllText($OutFile, $json + "`n") }
 foreach ($group in $output) {
     $parts = foreach ($key in $group.maps.Keys) {
         $value = $group.maps[$key]
@@ -135,4 +138,4 @@ foreach ($group in $output) {
     }
     Write-Host "$($group.name): $($parts -join ', ')"
 }
-Write-Host "Wrote $OutFile"
+if ($changed) { Write-Host "Wrote $OutFile" } else { Write-Host "$OutFile is up to date" }
