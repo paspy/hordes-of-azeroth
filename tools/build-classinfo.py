@@ -1,8 +1,22 @@
 import os
+import shutil
 import subprocess
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MARIADB = os.path.join(ROOT, "server", "mariadb", "bin", "mariadb.exe")
+
+
+def mariadb_program(name):
+    folder = os.environ.get("HOA_MARIADB") or os.path.join(ROOT, "server", "mariadb")
+    program = os.path.join(folder, "bin", name + (".exe" if os.name == "nt" else ""))
+    if os.name == "nt" or os.path.exists(program):
+        return program
+    for prefix in (os.environ.get("HOMEBREW_PREFIX"), "/opt/homebrew", "/usr/local"):
+        if prefix and os.path.exists(os.path.join(prefix, "opt", "mariadb@11.4", "bin", name)):
+            return os.path.join(prefix, "opt", "mariadb@11.4", "bin", name)
+    return shutil.which(name) or program
+
+
+MARIADB = mariadb_program("mariadb")
 OUT = os.path.join(ROOT, "Interface", "GlueXML", "BonkClassInfo.lua")
 STARTER_LINE_MAX = 31
 

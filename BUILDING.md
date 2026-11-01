@@ -6,6 +6,7 @@ This file is for people who want to build Hordes of Azeroth from source or work 
 
 - [Layout](#layout)
 - [Building from scratch](#building-from-scratch)
+- [Building on macOS](#building-on-macos)
 - [Running the development tree](#running-the-development-tree)
 - [The game mode on the server](#the-game-mode-on-the-server)
 - [Scripts](#scripts)
@@ -112,6 +113,45 @@ The output is `client\target\release\HordesOfAzeroth.exe`. It reads the game dat
 ### 6. The launcher
 
 The launcher is an Avalonia app for .NET 10 in `tools/launcher`, built for Windows and Linux: `dotnet publish tools\launcher\HordesOfAzerothLauncher.csproj -c Release -r win-x64` (or `linux-x64`). `HoALauncher.exe --source <folder>` installs and updates from a local folder of release assets instead of GitHub.
+
+<br>
+
+---
+
+## Building on macOS
+
+The development tree also builds and runs on macOS (Apple Silicon). Players still need Windows or Linux: the launcher and the releases have no macOS build yet. The steps follow [Building from scratch](#building-from-scratch), with these differences.
+
+You need the Xcode command line tools, [Rust](https://rustup.rs), the .NET 10 SDK and [Homebrew](https://brew.sh), and the 1.12.1 client in the repository root. Install the rest with Homebrew:
+
+```sh
+brew install cmake mysql-client@8.4 openssl@3 mariadb@11.4 powershell tmux
+```
+
+Use `mysql-client@8.4`, not a newer MySQL client: MySQL 9 dropped the `mysql_native_password` login that the local database uses.
+
+**Server.** `tools/macos/build-server.sh` builds the server and extractors with Homebrew's MySQL client and OpenSSL, then copies `mangosd`, `realmd`, `Extractors/` and the `*.conf.dist` files into `server/run`, the same layout as on Windows.
+
+**Database.** The scripts use the MariaDB folder in `HOA_MARIADB` if set, else `server/mariadb` if it exists, else Homebrew's `mariadb@11.4`. Create the data directory with a `root` / `root` login, then continue with step 3 from `tools/start-server.ps1 -DatabaseOnly` (use `$(brew --prefix mariadb@11.4)/bin/mariadb` in place of `server\mariadb\bin\mariadb.exe`):
+
+```sh
+maria="$(brew --prefix mariadb@11.4)"
+mkdir -p server/mariadb-data server/logs
+echo "UPDATE mysql.global_priv SET priv = JSON_SET(priv, '\$.plugin', 'mysql_native_password', '\$.authentication_string', PASSWORD('root')) WHERE User = 'root';" > server/logs/root-password.sql
+"$maria/bin/mariadb-install-db" --defaults-file=config/mariadb.ini --basedir="$maria" \
+    --datadir="$PWD/server/mariadb-data" --auth-root-authentication-method=normal \
+    --extra-file="$PWD/server/logs/root-password.sql"
+rm server/logs/root-password.sql
+```
+
+**Scripts.** The `tools/*.ps1` scripts run in `pwsh`, for example `pwsh tools/extract-client-data.ps1`. `play.sh` and `stop.sh` take the place of `play.bat` and `stop.bat`. MariaDB, realmd and mangosd run in tmux sessions named `hoa-mariadbd`, `hoa-realmd` and `hoa-mangosd`; `tmux attach -t hoa-mangosd` opens the server console. `stop.sh` stops the servers with SIGTERM, which saves and shuts down like `server shutdown`.
+
+**Client.** Link the repository root into the client folder and build it as in step 5. The output is `client/target/release/HordesOfAzeroth`:
+
+```sh
+ln -s "$PWD" client/WoW
+cd client && cargo build --release -p hoa
+```
 
 <br>
 

@@ -8,7 +8,7 @@ if (Test-DbUp) {
     Write-Host 'MariaDB already running'
 } else {
     Write-Host 'Starting MariaDB...'
-    Start-Quoted (Join-Path $MariaDir 'bin\mariadbd.exe') @(
+    Start-ServerConsole (Get-MariaProgram 'mariadbd') @(
         "--defaults-file=$(Join-Path $ConfigDir 'mariadb.ini')",
         "--basedir=$MariaDir",
         "--datadir=$MariaData"
@@ -21,7 +21,7 @@ if (Get-Process realmd -ErrorAction SilentlyContinue) {
     Write-Host 'realmd already running'
 } else {
     Write-Host 'Starting realmd...'
-    Start-Quoted (Join-Path $RunDir 'realmd.exe') @() $RunDir 'Minimized' | Out-Null
+    Start-ServerConsole (Get-Program $RunDir 'realmd') @() $RunDir | Out-Null
     Wait-Until { Test-PortOpen 3724 } 30 'realmd (port 3724)'
 }
 
@@ -29,9 +29,9 @@ if (Get-Process mangosd -ErrorAction SilentlyContinue) {
     Write-Host 'mangosd already running'
 } else {
     Write-Host 'Starting mangosd (world load takes a moment)...'
-    $world = Start-Quoted (Join-Path $RunDir 'mangosd.exe') @() $RunDir 'Minimized'
+    $world = Start-ServerConsole (Get-Program $RunDir 'mangosd') @() $RunDir
     Wait-Until {
-        if ($world.HasExited) { throw "mangosd exited with code $($world.ExitCode). See $LogDir\Server.log." }
+        if ($world.HasExited) { throw "mangosd exited$(if ($null -ne $world.ExitCode) { " with code $($world.ExitCode)" }). See $(Join-Path $LogDir 'Server.log')." }
         Test-PortOpen 8085
     } 300 'mangosd (port 8085)'
 }

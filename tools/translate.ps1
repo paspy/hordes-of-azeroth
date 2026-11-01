@@ -15,7 +15,7 @@ $AddonDir   = Join-Path $RepoRoot 'Interface\AddOns\HordesOfAzeroth'
 $BonkDir    = Join-Path $ServerDir 'core\src\game\Bonk'
 $Migrations = Join-Path $ServerDir 'core\sql\migrations'
 $LocaleDir  = Join-Path $RepoRoot "localization\$Locale"
-if (-not $MariaDb) { $MariaDb = Join-Path $MariaDir 'bin\mariadb.exe' }
+if (-not $MariaDb) { $MariaDb = Get-MariaProgram 'mariadb' }
 if (-not $ExportFile) { $ExportFile = Join-Path $LogDir "bonk-strings-$Locale.json" }
 
 $Files = @{

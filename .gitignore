@@ -33,12 +33,14 @@
 # Local server tooling and settings.
 !/tools/
 /tools/telegraphs/bin/
+/tools/telegraphs/obj/
 /tools/launcher/bin/
 /tools/launcher/obj/
 !/config/
 !/play.bat
-
+!/play.sh
 !/stop.bat
+!/stop.sh
 
 # Translations of the server's text, edited with tools/translate.ps1.
 !/localization/

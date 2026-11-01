@@ -7,16 +7,30 @@ import gzip
 import json
 import os
 import re
+import shutil
 import statistics
 import subprocess
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def mariadb_program(name):
+    folder = os.environ.get("HOA_MARIADB") or os.path.join(ROOT, "server", "mariadb")
+    program = os.path.join(folder, "bin", name + (".exe" if os.name == "nt" else ""))
+    if os.name == "nt" or os.path.exists(program):
+        return program
+    for prefix in (os.environ.get("HOMEBREW_PREFIX"), "/opt/homebrew", "/usr/local"):
+        if prefix and os.path.exists(os.path.join(prefix, "opt", "mariadb@11.4", "bin", name)):
+            return os.path.join(prefix, "opt", "mariadb@11.4", "bin", name)
+    return shutil.which(name) or program
+
+
 DEFAULT_LOG = os.path.join(ROOT, "server", "logs", "LevelUp.log")
 DEFAULT_ARCHIVE = os.path.join(ROOT, "data", "runs", "runs.jsonl")
 PLAYER_ARCHIVE = os.path.join(ROOT, "data", "runs", "players.jsonl")
 PLAYER_INBOX = os.path.join(ROOT, "data", "runs", "inbox")
 RECORD_FORMAT = 1
-MYSQL = os.path.join(ROOT, "server", "mariadb", "bin", "mysql.exe")
+MYSQL = mariadb_program("mariadb")
 CLASSES = {1: "Warrior", 2: "Paladin", 3: "Hunter", 4: "Rogue", 5: "Priest", 7: "Shaman", 8: "Mage", 9: "Warlock", 11: "Druid"}
 
 HEAD = re.compile(r"^(\S+ \S+) \[LevelUp\] \(acc (\d+),.*?name ([^,]+),.*?\) Bonk (\w+): (.*)$")

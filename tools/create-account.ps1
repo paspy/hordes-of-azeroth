@@ -9,7 +9,7 @@ if (Get-Process mangosd -ErrorAction SilentlyContinue) { throw 'Stop mangosd fir
 if (-not (Test-DbUp)) { throw 'MariaDB is not running (tools\start-server.ps1 starts it).' }
 
 $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-$startInfo.FileName = Join-Path $RunDir 'mangosd.exe'
+$startInfo.FileName = Get-Program $RunDir 'mangosd'
 $startInfo.WorkingDirectory = $RunDir
 $startInfo.UseShellExecute = $false
 $startInfo.RedirectStandardInput = $true
@@ -18,7 +18,7 @@ $world = [System.Diagnostics.Process]::Start($startInfo)
 $output = $world.StandardOutput.ReadToEndAsync()
 
 Wait-Until {
-    if ($world.HasExited) { throw "mangosd exited with code $($world.ExitCode). See $LogDir\Server.log." }
+    if ($world.HasExited) { throw "mangosd exited$(if ($null -ne $world.ExitCode) { " with code $($world.ExitCode)" }). See $(Join-Path $LogDir 'Server.log')." }
     Test-PortOpen 8085
 } 300 'mangosd (port 8085)'
 

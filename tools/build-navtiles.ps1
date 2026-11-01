@@ -10,7 +10,7 @@ $MapsDir = Join-Path $DataDir 'maps'
 $Camp = @{ Map = 1; X = 16226.2; Y = 16257.0 }
 
 function Invoke-Query([string]$Sql) {
-    $rows = & (Join-Path $MariaDir 'bin\mariadb.exe') @DbRootArgs -N -B -e $Sql $WorldDb
+    $rows = & (Get-MariaProgram 'mariadb') @DbRootArgs -N -B -e $Sql $WorldDb
     if ($LASTEXITCODE -ne 0) { throw "Query failed: $Sql" }
     foreach ($row in $rows) { , ($row -split "`t") }
 }

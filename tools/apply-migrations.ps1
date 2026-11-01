@@ -2,7 +2,7 @@
 
 if (-not (Test-DbUp)) { throw 'MariaDB is not running. Start it with tools\start-server.ps1 -DatabaseOnly.' }
 
-$mariadb   = Join-Path $MariaDir 'bin\mariadb.exe'
+$mariadb   = Get-MariaProgram 'mariadb'
 $databases = @{ world = 'mangos'; characters = 'characters'; logon = 'realmd' }
 $applied   = 0
 
