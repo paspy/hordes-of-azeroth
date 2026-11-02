@@ -18,12 +18,14 @@ if ($OnWindows) {
     Start-Quoted $exe $ClientArgs $client | Out-Null
 } else {
     New-Item -ItemType Directory -Force $LogDir | Out-Null
-    $params = @{
-        FilePath = $exe; WorkingDirectory = $client
-        RedirectStandardOutput = (Join-Path $LogDir 'Client.log'); RedirectStandardError = (Join-Path $LogDir 'ClientErrors.log')
+    $env:HOA_CLIENT_LOG = Join-Path $LogDir 'Client.log'
+    $env:HOA_CLIENT_ERRORS = Join-Path $LogDir 'ClientErrors.log'
+    Push-Location $client
+    try {
+        & /bin/sh -c 'nohup "$0" "$@" > "$HOA_CLIENT_LOG" 2> "$HOA_CLIENT_ERRORS" < /dev/null &' $exe @ClientArgs
+    } finally {
+        Pop-Location
     }
-    if ($ClientArgs) { $params.ArgumentList = $ClientArgs }
-    Start-Process @params | Out-Null
     Write-Host "Client output goes to $(Join-Path $LogDir 'Client.log')"
 }
 Write-Host "Started HordesOfAzeroth; it logs in as $Account"
