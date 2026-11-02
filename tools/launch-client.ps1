@@ -10,6 +10,15 @@ $exe = Get-Program (Join-Path (Join-Path $client 'target') 'release') 'HordesOfA
 if (-not (Test-Path $exe)) { throw 'Build the client first: cargo build --release -p hoa (in client/).' }
 
 $env:BENILLA_HOME = Join-Path $client 'benilla-config'
+$addon = Join-Path (Join-Path $RepoRoot 'Interface') (Join-Path 'AddOns' 'HordesOfAzeroth')
+$clientAddOns = Join-Path $env:BENILLA_HOME 'AddOns'
+$addonLink = Join-Path $clientAddOns 'HordesOfAzeroth'
+if (-not (Test-Path $addonLink)) {
+    New-Item -ItemType Directory -Force $clientAddOns | Out-Null
+    $linkType = if ($OnWindows) { 'Junction' } else { 'SymbolicLink' }
+    New-Item -ItemType $linkType -Path $addonLink -Target $addon | Out-Null
+    Write-Host "Linked the addon into $clientAddOns"
+}
 Get-ChildItem (Join-Path $env:BENILLA_HOME 'cache') -Filter *.bin -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force
 if (-not (Test-Path (Join-Path $client 'WoW'))) { $env:WOW_DATA = Join-Path $RepoRoot 'Data' }
 $env:WOW_USER = $Account
